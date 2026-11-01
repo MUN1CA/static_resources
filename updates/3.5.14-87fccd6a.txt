@@ -1,0 +1,4 @@
+• Adress Play Integrity issues
+• Update Linux Kernel to A346BXXSHFZJ4 (6.6.143, Oct 2026)
+• Miscs improvements and fixes
+• Build system improvements
