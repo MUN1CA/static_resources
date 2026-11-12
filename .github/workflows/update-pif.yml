@@ -1,0 +1,48 @@
+name: Update pif.json
+
+on:
+  schedule:
+    # 1st and 15th of every month at 03:23 UTC (~every 2 weeks, always on time)
+    - cron: "23 3 1,15 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-pif
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Generate pif.json
+        run: bash scripts/autopif4.sh --no-unica --device bluejay --output pif/pif.json
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Skip if the committed file differs from the new one only in VERSION
+          if git cat-file -e HEAD:pif/pif.json 2>/dev/null &&
+             diff -q <(git show HEAD:pif/pif.json | grep -v '"VERSION"') \
+                     <(grep -v '"VERSION"' pif/pif.json) >/dev/null; then
+            echo "Only VERSION changed (or nothing), not committing"
+            exit 0
+          fi
+          git add pif/pif.json
+          git commit -m "pif: update Pixel Canary fingerprint ($(date -u +%F))"
+          for attempt in 1 2 3; do
+            if git push origin "HEAD:${GITHUB_REF_NAME}"; then
+              exit 0
+            fi
+            echo "Push rejected (attempt $attempt), rebasing and retrying ..."
+            git pull --rebase origin "${GITHUB_REF_NAME}"
+          done
+          echo "Push failed after 3 attempts" >&2
+          exit 1
